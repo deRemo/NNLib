@@ -15,10 +15,7 @@ class StepDecayScheduler:
         self.epochs_drop = epochs_drop
 
     def lr_update(self, pair_lr, epoch):
-        if epoch % self.epochs_drop == 0:
-            return pair_lr[1] * math.pow(self.drop, math.floor(epoch / self.epochs_drop))
-        else:
-            return pair_lr[1]
+        return pair_lr[1] * math.pow(self.drop, math.floor(epoch / self.epochs_drop))
 
 
 class ExponentialDecayScheduler:

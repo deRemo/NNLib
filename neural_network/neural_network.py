@@ -67,7 +67,7 @@ class NeuralNetwork:
             self.l2_lambda = l2_lambda
         if dropout is not None:
             self.dropout = dropout
-            self.drop_or_not = np.vectorize(lambda x, y: 1 if x >= y else 0)
+            self.drop_or_not = np.vectorize(self._drop_or_not_)
         self.task = task
         for i, layer in enumerate(self.layers):
             if i < len(self.layers)-1:
@@ -97,23 +97,20 @@ class NeuralNetwork:
         :param err: np.array of shape [batch_size,] which represents the error of the current batch
         """
         for index in range(len(self.layers)-1, -1, -1):
-            curr_layer = self.layers[index]
+            layer = self.layers[index]
 
             # Output Layer
             if index == len(self.layers)-1:
-                err_signal = err * curr_layer.d_f(curr_layer.net)
-                curr_layer.d_weights += np.dot(curr_layer.input.T, err_signal)
-
-                bp = err_signal * curr_layer.weights.T
+                err_signal = err * layer.d_f(layer.net)
+                layer.d_weights += np.dot(layer.input.T, err_signal)
 
             # Hidden Layer
             else:
-                err_signal = bp * curr_layer.d_f(curr_layer.net)
-                curr_layer.d_weights += np.dot(curr_layer.input.T, err_signal)
+                err_signal = bp * layer.d_f(layer.net)
+                layer.d_weights += np.dot(layer.input.T, err_signal)
 
-                bp = err_signal
-
-            curr_layer.d_bias += np.sum(err_signal, axis=0)
+            bp = np.dot(err_signal, layer.weights.T)
+            layer.d_bias += np.sum(err_signal, axis=0)
 
     def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=10,
             save_stats=False, save_model=True):
@@ -230,7 +227,6 @@ class NeuralNetwork:
                 w_update -= 2*self.l2_lambda*layer.weights
             if self.dropout is not None:
                 mask = self.drop_or_not(np.random.random(layer.num_units), self.dropout[i])
-                print("Layer ", i, " dropout mask = ", mask)
                 w_update *= mask.T
             layer.weights += w_update
             layer.bias += bias_update
@@ -283,3 +279,9 @@ class NeuralNetwork:
             train_set, valid_set, train_targets, valid_targets = \
                 dataset[train_indices], dataset[val_indices], targets[train_indices], targets[val_indices]
         return train_set, valid_set, train_targets, valid_targets
+
+    def _drop_or_not_(self, x, y):
+        if x >= y:
+            return 1
+        else:
+            return 0

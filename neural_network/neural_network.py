@@ -187,7 +187,7 @@ class NeuralNetwork:
             y_true = valid_targets
             y_pred = self.predict(valid_set)
             validation_loss = np.sum(self.loss(y_true, y_pred), axis=0)
-            print("Validation ", i, ": ", validation_loss/len(valid_targets))
+            #print("Validation ", i, ": ", validation_loss/len(valid_targets))
             vl_loss.append(validation_loss)
             if self.task == 'Classification':
                 vl_accuracy.append(accuracy_score(y_true, y_pred.round()))

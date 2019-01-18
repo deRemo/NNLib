@@ -56,19 +56,15 @@ class NeuralNetwork:
         :param l2_lambda: defines the lambda parameter for L2 regularization. None if not regularized.
         :param dropout: list of the probabilities of dropout for each layer
         """
+        self.task = task
         self.loss, self.d_loss = loss_aux(loss)
         self.optimizer = optimizer
-        if optimizer.method == 'SGD' and optimizer.momentum != 0:
-            optimizer.prev_gradients = [(np.zeros(layer.d_weights.shape),
-                                        (np.zeros(layer.d_bias.shape))) for layer in self.layers]
-            if optimizer.nesterov:
-                optimizer.layer_deriv = [layer.d_f for layer in self.layers]
+        self.optimizer.init_optimizer(self.layers)
         if l2_lambda is not None:
             self.l2_lambda = l2_lambda
         if dropout is not None:
             self.dropout = dropout
             self.drop_or_not = np.vectorize(self._drop_or_not_)
-        self.task = task
         for i, layer in enumerate(self.layers):
             if i < len(self.layers)-1:
                 layer.init_weights(self.layers[i+1].num_units)
@@ -209,7 +205,7 @@ class NeuralNetwork:
                     break
         if save_stats:
             np.save("tr_loss.npy", np.array(tr_loss))
-            np.save("vl_loss.npy", np.array(tr_loss))
+            np.save("vl_loss.npy", np.array(vl_loss))
             if self.task == 'Classification':
                 np.save("tr_accuracy.npy", np.array(tr_accuracy))
                 np.save("vl_accuracy.npy", np.array(vl_accuracy))

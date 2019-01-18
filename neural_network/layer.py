@@ -56,5 +56,4 @@ class Layer:
             if self.activation == 'sigmoid':
                 r = 4*r
             self.weights = np.random.uniform(low=-r, high=r, size=(self.input_size, self.num_units))
-            print(self.weights.shape)
 

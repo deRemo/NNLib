@@ -9,7 +9,7 @@ class SGD(Optimizer):
         lr(float) - current value of learning rate
         lr_init(float) - initial value of learning rate
         momentum(float) - momentum's value
-        prev_updates(list) - takes trace of the updates at the previous iteration (used only with momentum descent)
+        prev_gradients(list) - takes trace of the updates at the previous iteration (used only with momentum descent)
         nesterov(bool) - True if Nesterov Accelerated Gradient is performed
         lr_sched(str) -  the technique of the learning rate's update
     """

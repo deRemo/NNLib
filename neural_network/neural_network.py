@@ -108,8 +108,8 @@ class NeuralNetwork:
             bp = np.dot(err_signal, layer.weights.T)
             layer.d_bias += np.sum(err_signal, axis=0)
 
-    def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=10,
-            save_stats=False, save_model=True):
+    def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=100,
+            save_stats=None, save_model='best_nn', verbose=False):
         """
         Fits the neural network on the given dataset with a training-validation cycle (the split is performed by the
         function itself with the proportions provided by test_size).
@@ -187,15 +187,16 @@ class NeuralNetwork:
             y_true = valid_targets
             y_pred = self.predict(valid_set)
             validation_loss = np.sum(self.loss(y_true, y_pred), axis=0)
-            #print("Validation ", i, ": ", validation_loss/len(valid_targets))
             vl_loss.append(validation_loss)
             if self.task == 'Classification':
                 vl_accuracy.append(accuracy_score(y_true, y_pred.round()))
 
             if validation_loss < best_loss:
+                if verbose:
+                    print("Validation improved at ", i, ": ", validation_loss/len(valid_targets))
                 best_model = deepcopy(self)
-                if save_model:
-                    with open('best_nn.pkl', 'wb') as output:
+                if save_model is not None:
+                    with open(save_model+'.pkl', 'wb') as output:
                         pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
                 best_loss = validation_loss
                 iter_no_gain = 0
@@ -203,12 +204,12 @@ class NeuralNetwork:
                 iter_no_gain += 1
                 if patience is not None and iter_no_gain == patience:
                     break
-        if save_stats:
-            np.save("tr_loss.npy", np.array(tr_loss))
-            np.save("vl_loss.npy", np.array(vl_loss))
+        if save_stats is not None:
+            np.save(save_stats+"tr_loss.npy", np.array(tr_loss))
+            np.save(save_stats+"vl_loss.npy", np.array(vl_loss))
             if self.task == 'Classification':
-                np.save("tr_accuracy.npy", np.array(tr_accuracy))
-                np.save("vl_accuracy.npy", np.array(vl_accuracy))
+                np.save(save_stats+"tr_accuracy.npy", np.array(tr_accuracy))
+                np.save(save_stats+"vl_accuracy.npy", np.array(vl_accuracy))
 
         return best_model
 

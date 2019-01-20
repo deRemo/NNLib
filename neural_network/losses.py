@@ -10,7 +10,7 @@ def loss_aux(f):
     """
     loss_dict = {
         'LMS': (lms, d_lms),
-        #'categorical_crossentropy': (lambda x: tanh(x), lambda x: d_tanh(x)),
+        # 'categorical_crossentropy': (lambda x: tanh(x), lambda x: d_tanh(x)),
     }
     return loss_dict[f]
 

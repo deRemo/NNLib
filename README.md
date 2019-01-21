@@ -1,5 +1,5 @@
 # NNLib
-Simple neural network implementation from scratch for an university project.
-Scikit-Learn has been used for "secondary" functionalities, as for splitting the training set during validation.
+Neural Network (MLP) implementation from scratch for a university project.
+Scikit-Learn has been used for "secondary" functionalities (e.g. splitting the training set during validation).
 
-Made by Remo Andreoli and Valerio De Caro
+Projected and developed by Remo Andreoli and Valerio De Caro.

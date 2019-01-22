@@ -1,8 +1,8 @@
 import numpy as np
-from optimizer import Optimizer
+from gradient_based_optimizer import GradientBasedOptimizer
 
 
-class SGD(Optimizer):
+class SGD(GradientBasedOptimizer):
     """
     Stochastic Gradient Descent optimizer.
         method(str) - declares that the optimizer is a SGD optimizer
@@ -25,30 +25,28 @@ class SGD(Optimizer):
         if momentum is not None and momentum != 0:
             self.prev_updates = None
 
-    def init_optimizer(self, layers):
-        """
-        Prepares the additional informations of the optimizer.
-        :param layers: layers of the neural network.
-        """
-        if self.momentum is not None and self.momentum != 0:
-            self.prev_updates = [(np.zeros(layer.d_weights.shape),
-                                  (np.zeros(layer.d_bias.shape))) for layer in layers]
+    def init_optimizer(self, loss, layers):
+        super(SGD, self).init_optimizer(loss, layers)
+        if self.momentum is not None:
+            self.prev_updates = [(np.zeros((layer.input_size, layer.num_units)),
+                                  np.zeros((1, layer.num_units))) for layer in layers]
 
-    def weights_update(self, w_grad, bias_grad):
+    def weights_update(self, i):
         """
         Function for the weight update by SGD.
-        :param w_grad: gradient of a layer's weights
-        :param bias_grad: gradient of a layer's bias
+        :param i: index of the layer to update
         :returns: the value for the weights and bias update by SGD
         """
+        w_grad, b_grad = self.gradients[i]
         if self.momentum is None or self.momentum == 0:
-            return self.lr * w_grad, self.lr * bias_grad
+            return self.lr * w_grad, self.lr * b_grad
         else:
-            prev_w_grad, prev_b_grad = self.prev_updates.pop(0)
-            w_update = self.momentum * prev_w_grad + self.lr * w_grad
-            bias_update = self.momentum * prev_b_grad + self.lr * bias_grad
-            self.prev_updates.append((w_update, bias_update))
-            return w_update, bias_update
+            prev_w_up, prev_b_up = self.prev_updates[i]
+            w_update = self.momentum * prev_w_up + self.lr * w_grad
+            b_update = self.momentum * prev_b_up + self.lr * b_grad
+            self.gradients[i] = (np.zeros(w_grad.shape), np.zeros(b_grad.shape))
+            self.prev_updates[i] = (w_update, b_update)
+            return w_update, b_update
 
     def aux_params(self, weights, bias, i):
         """
@@ -72,7 +70,3 @@ class SGD(Optimizer):
         """
         if self.lr_sched is not None:
             self.lr = self.lr_sched.lr_update((self.lr, self.lr_init), epoch)
-        if self.momentum != 0:
-            for i in range(len(self.prev_updates)):
-                self.prev_updates[i] = (np.zeros(self.prev_updates[i][0].shape),
-                                        np.zeros(self.prev_updates[i][1].shape))

@@ -19,7 +19,6 @@ class Layer:
             input_size(int) - shape of the input
 
             weights(np.array) - matrix of the weights of the layer (initialized randomly)
-            d_weights(np.array) - values for the weights update
             bias(np.array) - the bias of the layer
 
     """
@@ -37,10 +36,7 @@ class Layer:
         self.input_size = input_size
 
         self.weights = None
-        self.d_weights = (np.zeros((input_size, num_units)))
-
         self.bias = np.zeros((1, num_units))
-        self.d_bias = np.zeros((1, num_units))
 
     def init_weights(self, fan_out):
         """

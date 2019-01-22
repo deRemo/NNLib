@@ -2,9 +2,6 @@ import numpy as np
 from layer import Layer
 from losses import loss_aux
 
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-
 import pickle
 from copy import deepcopy
 import random
@@ -19,16 +16,14 @@ class NeuralNetwork:
             task(str) - the task to be performed
             layers(list) - layers of the neural network
             loss(func) - the loss function exploited by the neural network
-            d_loss(func) - derivative of the error for backpropagation
             optimizer(obj) - optimizer of the neural network (currently SGD only, later bundle method's too)
             l2_lambda(float) - lambda value for L2 regularization
             drop_or_not(np.vectorize) - aux function for the computation of the dropout mask
     """
     def __init__(self):
         self.task = None
-        self.layers = []
         self.loss = None
-        self.d_loss = None
+        self.layers = []
         self.optimizer = None
         self.l2_lambda = None
         self.dropout = None
@@ -57,9 +52,9 @@ class NeuralNetwork:
         :param dropout: list of the probabilities of dropout for each layer
         """
         self.task = task
-        self.loss, self.d_loss = loss_aux(loss)
+        self.loss = loss_aux(loss)[0]
         self.optimizer = optimizer
-        self.optimizer.init_optimizer(self.layers)
+        self.optimizer.init_optimizer(loss=loss, layers=self.layers)
         if l2_lambda is not None:
             self.l2_lambda = l2_lambda
         if dropout is not None:
@@ -87,27 +82,6 @@ class NeuralNetwork:
             current_input = layer.out
         return current_input
 
-    def _back_propagation_(self, err):
-        """
-        Implementation of backpropagation for the weight update.
-        :param err: np.array of shape [batch_size,] which represents the error of the current batch
-        """
-        for index in range(len(self.layers)-1, -1, -1):
-            layer = self.layers[index]
-
-            # Output Layer
-            if index == len(self.layers)-1:
-                err_signal = err * layer.d_f(layer.net)
-                layer.d_weights += np.dot(layer.input.T, err_signal)
-
-            # Hidden Layer
-            else:
-                err_signal = bp * layer.d_f(layer.net)
-                layer.d_weights += np.dot(layer.input.T, err_signal)
-
-            bp = np.dot(err_signal, layer.weights.T)
-            layer.d_bias += np.sum(err_signal, axis=0)
-
     def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=10,
             save_stats=None, save_model='best_nn', verbose=False):
         """
@@ -131,6 +105,7 @@ class NeuralNetwork:
         :param patience: number of epochs without gain before calling early stopping
         :param save_stats: whether or not to save the statistics
         :param save_model: whether or not to save in memory the best model
+        :param verbose: whether or not print informations about training process
         :return: the best model
         """
         if buffer_size is None:
@@ -140,6 +115,7 @@ class NeuralNetwork:
                 buffer_size = 2048
         iter_no_gain = 0
         best_loss = float('Inf')
+        best_accuracy = float(0)
         best_model = None
 
         tr_loss = []
@@ -165,7 +141,7 @@ class NeuralNetwork:
                 train_slice = min(j+buffer_size, (curr_batch*batch_size)-j, len(train_set)-j)
                 y_true = train_targets[j:j+train_slice]
                 y_pred = self._feed_forward_(train_set[j:j+train_slice, :])
-                self._back_propagation_(self.d_loss(y_true, y_pred))
+                self.optimizer.process_loss(y_true, y_pred, self.layers)
                 tr_epoch_loss[j:j+train_slice] = self.loss(y_true, y_pred)[:, 0]
                 if self.task == 'Classification':
                     tr_prediction[j:j+train_slice] = y_pred[:, 0]
@@ -178,8 +154,9 @@ class NeuralNetwork:
 
             tr_loss.append(np.sum(tr_epoch_loss, axis=0))
             if self.task == 'Classification':
-                acc = accuracy_score(train_targets[:, 0], tr_prediction.round())
-                tr_accuracy.append(acc)
+                correct = len(train_targets[train_targets[:, 0] == tr_prediction.round()])
+                accuracy = correct / len(tr_prediction)
+                vl_accuracy.append(accuracy)
 
             # -------------------------------------------------------------------- #
             #                           VALIDATION                                 #
@@ -189,17 +166,31 @@ class NeuralNetwork:
             validation_loss = np.sum(self.loss(y_true, y_pred), axis=0)
             vl_loss.append(validation_loss)
             if self.task == 'Classification':
-                vl_accuracy.append(accuracy_score(y_true, y_pred.round()))
+                correct = len(y_true[y_true == y_pred.round()])
+                accuracy = correct/len(y_true)
+                vl_accuracy.append(accuracy)
 
-            if validation_loss < best_loss:
+            if (self.task == 'Regression' and validation_loss < best_loss) or \
+                    (self.task == 'Classification' and accuracy > best_accuracy):
+
+                if self.task == 'Classification' and accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                if self.task == 'Regression' and validation_loss < best_loss:
+                    best_loss = validation_loss
+
                 best_model = deepcopy(self)
-                if verbose:
-                    print("Validation improved at epoch ", i, ": ", validation_loss / len(valid_targets))
                 if save_model is not None:
-                    with open(save_model+'.pkl', 'wb') as output:
+                    with open(save_model + '.pkl', 'wb') as output:
                         pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
-                best_loss = validation_loss
-                if best_loss == 0:
+
+                if verbose:
+                    if self.task == 'Regression':
+                        print("Loss improved at epoch ", i, ": ", validation_loss / len(valid_targets))
+                    elif self.task == 'Classification':
+                        print("Accuracy improved at epoch ", i, ": ", best_accuracy)
+
+                if (self.task == 'Regression' and best_loss == 0) or \
+                        (self.task == 'Classification' and best_accuracy == 1.0):
                     break
                 iter_no_gain = 0
             else:
@@ -221,7 +212,7 @@ class NeuralNetwork:
         """
         for i in range(len(self.layers)):
             layer = self.layers[i]
-            w_update, bias_update = self.optimizer.weights_update(layer.d_weights, layer.d_bias)
+            w_update, bias_update = self.optimizer.weights_update(i)
             if self.l2_lambda is not None:
                 w_update -= 2*self.l2_lambda*layer.weights
             if self.dropout is not None:
@@ -229,8 +220,6 @@ class NeuralNetwork:
                 w_update *= mask.T
             layer.weights += w_update
             layer.bias += bias_update
-            layer.d_weights = np.zeros(layer.d_weights.shape)
-            layer.d_bias = np.zeros(layer.d_bias.shape)
 
     def predict(self, batch):
         """
@@ -253,14 +242,27 @@ class NeuralNetwork:
         Prepares a stratified split of the dataset for both classification and regression tasks.
         :param dataset: the dataset to be splitted
         :param targets: the corresponding targets of the dataset
-        :param test_size: the proportion of the test set ([0.0, 1.0])
+        :param test_size: the proportion of the test set ((0.0, 1.0))
         :return: tuple (training_set, validation_set, training_targets, validation_targets)
         """
         if len(targets.shape) == 1:
             targets = np.expand_dims(targets, axis=1)
         if self.task == 'Classification':
-            train_set, valid_set, train_targets, valid_targets = \
-                train_test_split(dataset, targets, random_state=0, test_size=test_size, stratify=targets)
+            tmp_data = np.concatenate([dataset, targets], axis=1)
+            train_set, valid_set, train_targets, valid_targets = [], [], [], []
+            for value in np.unique(targets):
+                curr_split = tmp_data[tmp_data[:, -1] == value]
+                np.random.shuffle(curr_split)
+                test_split = curr_split[:math.floor(len(curr_split)*test_size)]
+                train_split = curr_split[math.floor(len(curr_split)*test_size):]
+                train_set += train_split[:, :-1].tolist()
+                train_targets += train_split[:, -1].tolist()
+                valid_set += test_split[:, :-1].tolist()
+                valid_targets += test_split[:, -1].tolist()
+            train_set = np.array(train_set)
+            train_targets = np.expand_dims(np.array(train_targets), axis=1)
+            valid_set = np.array(valid_set)
+            valid_targets = np.expand_dims(np.array(valid_targets), axis=1)
 
         elif self.task == 'Regression':
             index = np.argsort(targets[:, 0])

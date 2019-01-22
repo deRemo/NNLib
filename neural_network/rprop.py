@@ -1,14 +1,12 @@
 import numpy as np
-from optimizer import Optimizer
-from copy import deepcopy
+from gradient_based_optimizer import GradientBasedOptimizer
 
 
-class Rprop(Optimizer):
+class Rprop(GradientBasedOptimizer):
 
-    def __init__(self, delta_0=0.1, lr_low=0.5, lr_high=1.2, delta_max=50, backtracking=False):
+    def __init__(self, delta_0=0.1, lr_low=0.5, lr_high=1.2, delta_max=50):
         super(Rprop, self).__init__()
         self.method = 'RPROP'
-        self.backtracking = backtracking
         self.lr_low = lr_low
         self.lr_high = lr_high
         self.delta_min = 1e-6
@@ -16,117 +14,69 @@ class Rprop(Optimizer):
         self.delta_max = delta_max
         self.prev_steps = None
         self.prev_gradients = None
-        if self.backtracking:
-            self.prev_updates = None
+        self.prev_updates = None
+        self.curr_loss = float(0)
+        self.last_loss = float('+inf')
 
-    def init_optimizer(self, layers):
-        """
-        Prepares the additional informations of the optimizer.
-        :param layers: layers of the neural network.
-        """
-        self.prev_steps = [(np.full(shape=layer.d_weights.shape, fill_value=self.delta_0),
-                           (np.full(shape=layer.d_bias.shape, fill_value=self.delta_0))) for layer in layers]
-        self.prev_gradients = [(np.zeros(layer.d_weights.shape),
-                               (np.zeros(layer.d_bias.shape))) for layer in layers]
-        if self.backtracking:
-            self.prev_updates = [(np.zeros(layer.d_weights.shape),
-                                 (np.zeros(layer.d_bias.shape))) for layer in layers]
+    def process_loss(self, y_true, y_pred, layers):
+        super(Rprop, self).process_loss(y_true, y_pred, layers)
+        self.curr_loss += np.sum(self.loss(y_true, y_pred), axis=0)
 
-    def weights_update(self, w_grad, b_grad):
+    def init_optimizer(self, loss, layers):
+        super(Rprop, self).init_optimizer(loss, layers)
+        self.prev_steps = [(np.full(shape=(layer.input_size, layer.num_units), fill_value=self.delta_0),
+                           (np.full(shape=(1, layer.num_units), fill_value=self.delta_0))) for layer in layers]
+        self.prev_gradients = [(np.zeros((layer.input_size, layer.num_units)),
+                               (np.zeros((1, layer.num_units)))) for layer in layers]
+        self.prev_updates = [(np.zeros((layer.input_size, layer.num_units)),
+                             (np.zeros((1, layer.num_units)))) for layer in layers]
+
+    def weights_update(self, i):
         """
         Function for the weight update by RPROP.
-        :param w_grad: weights' current gradient
-        :param b_grad: bias current gradient
-        :return: the value for the weights and bias update by Resilient Propagation
         """
-        if self.backtracking:
-            return self._backtracking_rprop_(w_grad, b_grad)
-        else:
-            return self._no_backtracking_rprop_(w_grad, b_grad)
-
-    def _backtracking_rprop_(self, w_grad, b_grad):
-        prev_w_step, prev_b_step = self.prev_steps.pop(0)
-        prev_w_grad, prev_b_grad = self.prev_gradients.pop(0)
-        prev_w_update, prev_b_update = self.prev_updates.pop(0)
+        w_grad, b_grad = self.gradients[i]
+        curr_w_step, curr_b_step = self.prev_steps[i]
+        prev_w_grad, prev_b_grad = self.prev_gradients[i]
+        prev_w_update, prev_b_update = self.prev_updates[i]
 
         prod_w_grad = prev_w_grad * w_grad
         prod_b_grad = prev_b_grad * b_grad
-        curr_w_step = deepcopy(prev_w_step)
-        curr_b_step = deepcopy(prev_b_step)
         w_update = np.zeros(w_grad.shape)
         b_update = np.zeros(b_grad.shape)
 
         for j in range(w_grad.shape[1]):  # For each neuron j
-            for i in range(w_grad.shape[0]):  # For each weight i of neuron j
-                if prod_w_grad[i, j] >= 0:
-                    if prod_w_grad[i, j] > 0:  # Descending step ---> boost stepsize (if ==0 we use the same stepsize)
-                        curr_w_step[i, j] = min(prev_w_step[i, j] * self.lr_high, self.delta_max)
-                    if w_grad[i, j] == 0:
-                        coeff = +1
-                    else:
-                        coeff = -np.sign(w_grad[i, j])
-                    w_update[i, j] = coeff * curr_w_step[i, j]
+            for k in range(w_grad.shape[0]):  # For each weight i of neuron j
+                if prod_w_grad[k, j] > 0:
+                    curr_w_step[k, j] = min(curr_w_step[k, j] * self.lr_high, self.delta_max)
+                    w_update[k, j] = -np.sign(w_grad[k, j]) * curr_w_step[k, j]
 
-                else:   # Ascending step ---> backtrack
-                    curr_w_step[i, j] = max(prev_w_step[i, j] * self.lr_low, self.delta_min)
-                    w_update[i, j] = -prev_w_update[i, j]
-                    w_grad[i, j] = 0
+                elif prod_w_grad[k, j] < 0:
+                    curr_w_step[k, j] = max(curr_w_step[k, j] * self.lr_low, self.delta_min)
+                    if self.curr_loss > self.last_loss:
+                        w_update[k, j] = -prev_w_update[k, j]
+                    w_grad[k, j] = 0
 
-            # Updating bias of neuron j
-            if prod_b_grad[0, j] >= 0:
-                if prod_b_grad[0, j] > 0:
-                    curr_b_step[0, j] = min(prev_b_step[0, j] * self.lr_high, self.delta_max)
-                if b_grad[0, j] == 0:
-                    coeff = +1
                 else:
-                    coeff = -np.sign(b_grad[0, j])
-                b_update[0, j] = coeff * curr_b_step[0, j]
-
-            else:
-                curr_b_step[0, j] = max(prev_b_step[0, j] * self.lr_low, self.delta_min)
-                b_update[0, j] = -prev_b_update[0, j]
-                b_grad[0, j] = 0
-
-        self.prev_steps.append((curr_w_step, curr_b_step))
-        self.prev_gradients.append((w_grad, b_grad))
-        self.prev_updates.append((w_update, b_update))
-        return w_update, b_update
-
-    def _no_backtracking_rprop_(self, w_grad, b_grad):
-        prev_w_step, prev_b_step = self.prev_steps.pop(0)
-        prev_w_grad, prev_b_grad = self.prev_gradients.pop(0)
-
-        prod_w_grad = prev_w_grad * w_grad
-        prod_b_grad = prev_b_grad * b_grad
-        curr_w_step = deepcopy(prev_w_step)
-        curr_b_step = deepcopy(prev_b_step)
-        w_update = np.zeros(w_grad.shape)
-        b_update = np.zeros(b_grad.shape)
-
-        for j in range(w_grad.shape[1]):  # For each neuron j
-            for i in range(w_grad.shape[0]):  # For each weight i of neuron j
-                if prod_w_grad[i, j] > 0:
-                    curr_w_step[i, j] = min(prev_w_step[i, j] * self.lr_high, self.delta_max)
-                elif prod_w_grad[i, j] < 0:
-                    curr_w_step[i, j] = max(prev_w_step[i, j] * self.lr_low, self.delta_min)
-                if w_grad[i, j] == 0:
-                    coeff = +1
-                else:
-                    coeff = -np.sign(w_grad[i, j])
-                w_update[i, j] = coeff * curr_w_step[i, j]
+                    w_update[k, j] = -np.sign(w_grad[k, j]) * curr_w_step[k, j]
 
             # Updating bias of neuron j
             if prod_b_grad[0, j] > 0:
-                curr_b_step[0, j] = min(prev_b_step[0, j] * self.lr_high, self.delta_max)
+                curr_b_step[0, j] = min(curr_b_step[0, j] * self.lr_high, self.delta_max)
+                b_update[0, j] = -np.sign(b_grad[0, j]) * curr_b_step[0, j]
+
             elif prod_b_grad[0, j] < 0:
-                curr_b_step[0, j] = max(prev_b_step[0, j] * self.lr_low, self.delta_min)
-            if b_grad[0, j] == 0:
-                coeff = +1
+                curr_b_step[0, j] = max(curr_b_step[0, j] * self.lr_low, self.delta_min)
+                if self.curr_loss > self.last_loss:
+                    b_update[0, j] = -prev_b_update[0, j]
+                b_grad[0, j] = 0
+
             else:
-                coeff = -np.sign(b_grad[0, j])
-            b_update[0, j] = coeff * curr_b_step[0, j]
+                b_update[0, j] = -np.sign(b_grad[0, j]) * curr_b_step[0, j]
 
-        self.prev_steps.append((curr_w_step, curr_b_step))
-        self.prev_gradients.append((w_grad, b_grad))
-
+        self.gradients[i] = (np.zeros(w_grad.shape), np.zeros(b_grad.shape))
+        self.prev_updates[i] = (w_update, b_update)
+        self.prev_gradients[i] = (w_grad, b_grad)
+        self.last_loss = self.curr_loss
+        self.curr_loss = 0
         return w_update, b_update

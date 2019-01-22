@@ -5,7 +5,7 @@ from rprop import Rprop
 from lr_schedulers import ExponentialDecayScheduler, TimeBasedScheduler, StepDecayScheduler
 import numpy as np
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import ParameterGrid
+from sklearn.model_selection import ParameterGrid, StratifiedKFold
 import random
 
 
@@ -39,15 +39,63 @@ class GridSearch:
                                test_size=params['test_size'],
                                epochs=params['epoch'],
                                patience=params['patience'],
-                               save_stats=True)
+                               save_stats="gs")
 
-            accuracy = np.amax(np.load("vl_accuracy.npy"))
+            accuracy = np.amax(np.load("gs_vl_accuracy.npy"))
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
                 best_param = {x: params[x] for x in list(params.keys())}
                 
         return best_accuracy, best_param
 
+class GridSearchCV:
+    """
+    GridSearchCV implementation
+        Attributes:
+        tuning_params(dict) - parameters to tune
+        estimator(neural_network) - the neural network to fit with the tuned parameters
+        cv(int) - determines the cross-validation splitting strategy
+    """
+    def __init__(self, tuning_params, estimator, cv=3):
+        self.tuning_params = tuning_params
+        self.estimator = estimator
+        self.cv = cv
+
+    def fit(self, dataset, targets):
+        """
+        Fit the estimator with the given dataset and targets
+        :param dataset: data on which the model will fit
+        :param targets: ground_truth values of the given data
+        """
+        best_accuracy = -1
+        grid = ParameterGrid(self.tuning_params)
+        skf = StratifiedKFold(n_splits=self.cv, shuffle=True)
+
+        for params in grid:
+            self.estimator.compile(optimizer=SGD(lr_init=params['lr'],
+                                                 momentum=params['momentum'],
+                                                 nesterov=params['nesterov'],
+                                                 lr_sched=StepDecayScheduler(epochs_drop=15)))
+            
+            for train_index, test_index in skf.split(dataset, targets):
+                X_train, X_test = dataset[train_index], dataset[test_index]
+                Y_train, Y_test = targets[train_index], targets[test_index]
+
+                self.estimator.fit(X_train, Y_train,
+                                batch_size=params['batch_size'],
+                                test_size=params['test_size'],
+                                epochs=params['epoch'],
+                                patience=params['patience'],
+                                save_stats="gs")
+
+                Y_pred = self.estimator.predict(X_test)
+                
+                accuracy = np.amax(np.load("gs_vl_accuracy.npy"))
+                if accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                    best_param = {x: params[x] for x in list(params.keys())}
+                
+        return best_accuracy, best_param
 
 class RandomSearch:
     """
@@ -84,7 +132,7 @@ class RandomSearch:
                                test_size=params['test_size'],
                                epochs=params['epoch'],
                                patience=params['patience'],
-                               save_stats=True)
+                               save_stats="vl_accuracy.npy")
             
             accuracy = np.amax(np.load("vl_accuracy.npy"))
             if accuracy > best_accuracy:

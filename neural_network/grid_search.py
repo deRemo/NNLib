@@ -44,7 +44,8 @@ class GridSearch:
         :param dataset: data on which the model will fit
         :param targets: ground_truth values of the given data
         """
-        dir = '.tmp'.join(random.choices(string.ascii_lowercase + string.digits, k=16))+'/'
+        dir = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
+        dir = '.tmp'+dir+'/'
         os.mkdir(dir)
         grid = self.grid
         if self.folds is not None:

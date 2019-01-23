@@ -129,11 +129,11 @@ class GridSearch:
         dataset, targets = dataset[index], targets[index]
         indices = [([], []) for _ in range(self.folds)]
         for i in range(0, len(targets), self.folds):
-            for j in range(self.folds):
-                if j+self.folds-1 < len(targets):
-                    for k in range(self.folds):
-                        if k == j and j + i < len(targets):
-                            indices[j][1].append(i+k)
-                        elif k != j:
-                            indices[j][0].append(i+k)
+            if i + self.folds < len(targets):
+                for j in range(self.folds):
+                        for k in range(self.folds):
+                            if k == j and k + i < len(targets):
+                                indices[j][1].append(i+k)
+                            elif k != j:
+                                indices[j][0].append(i+k)
         return indices, dataset, targets

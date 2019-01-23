@@ -272,8 +272,8 @@ class NeuralNetwork:
             train_indices = []
             val_indices = []
             for i in range(0, len(targets), step):
-                to_add = random.randint(0, step)
-                for j in range(step+1):
+                to_add = random.randint(0, step-1)
+                for j in range(step):
                     if j == to_add and to_add + i < len(targets):
                         val_indices.append(to_add + i)
                     elif j != to_add and j+i < len(targets):

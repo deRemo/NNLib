@@ -4,12 +4,7 @@ from losses import loss_aux
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import ParameterGrid, StratifiedKFold, StratifiedShuffleSplit
-import random
-import copy
-import string
-import os
-import shutil
-
+import random, copy, string, os, shutil, math
 
 class GridSearch:
     """
@@ -49,10 +44,13 @@ class GridSearch:
         os.mkdir(dir)
         grid = self.grid
         if self.folds is not None:
-            if self.folds > 1:
-                sf = StratifiedKFold(n_splits=self.folds, shuffle=True, random_state=0)
-            elif 0 <= self.folds < 1:
-                sf = StratifiedShuffleSplit(n_splits=1, test_size=self.folds, random_state=0)
+            if self.task == 'Classification':
+                if self.folds > 1:
+                    sf = StratifiedKFold(n_splits=self.folds, shuffle=True, random_state=0)
+                elif 0 <= self.folds < 1:
+                    sf = StratifiedShuffleSplit(n_splits=1, test_size=self.folds, random_state=0)
+            elif self.task == 'Regression':
+                folds, dataset, targets = self.split_regression(dataset, targets)
         results = []
         for params in grid:
             try:
@@ -65,7 +63,9 @@ class GridSearch:
 
                 conf_acc = []
                 conf_loss = []
-                for train_index, test_index in sf.split(dataset, targets):
+                if self.task == 'Classification':
+                    folds = sf.split(dataset, targets)
+                for train_index, test_index in folds:
                     X_train, X_test = dataset[train_index], dataset[test_index]
                     Y_train, Y_test = targets[train_index], targets[test_index]
                     nested_best = None
@@ -87,7 +87,7 @@ class GridSearch:
                                             patience=params['patience'],
                                             save_stats=dir+'tmp_gs')
 
-                        loss_array = np.load(dir+   'tmp_gs_vl_loss.npy')
+                        loss_array = np.load(dir+'tmp_gs_vl_loss.npy')
                         if self.task == 'Classification':
                             acc_array = np.load(dir+'tmp_gs_vl_accuracy.npy')
                             index = np.argmax(acc_array)
@@ -121,3 +121,17 @@ class GridSearch:
                 continue
         shutil.rmtree(dir)
         return results
+
+    def split_regression(self, dataset, targets):
+        index = np.argsort(targets[:, 0])
+        dataset, targets = dataset[index], targets[index]
+        indices = [([], []) for _ in range(self.folds)]
+        for i in range(0, len(targets), self.folds):
+            for j in range(self.folds):
+                if j+self.folds-1 < len(targets):
+                    for k in range(self.folds):
+                        if k == j and j + i < len(targets):
+                            indices[j][1].append(i+k)
+                        elif k != j:
+                            indices[j][0].append(i+k)
+        return indices, dataset, targets

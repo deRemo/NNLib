@@ -4,7 +4,8 @@ from losses import loss_aux
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import ParameterGrid, StratifiedKFold, StratifiedShuffleSplit
-import random, copy, string, os, shutil, math
+import random, copy, string, os, shutil
+
 
 class GridSearch:
     """
@@ -85,7 +86,8 @@ class GridSearch:
                                             test_size=params['test_size'],
                                             epochs=params['epoch'],
                                             patience=params['patience'],
-                                            save_stats=dir+'tmp_gs')
+                                            save_stats=dir+'tmp_gs',
+                                            save_model=None)
 
                         loss_array = np.load(dir+'tmp_gs_vl_loss.npy')
                         if self.task == 'Classification':

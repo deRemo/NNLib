@@ -55,8 +55,9 @@ class NeuralNetwork:
         self.loss = loss_aux(loss)[0]
         self.optimizer = optimizer
         self.optimizer.init_optimizer(loss=loss, layers=self.layers)
-        if l2_lambda is not None:
+        if l2_lambda is not None and l2_lambda > 0:
             self.l2_lambda = l2_lambda
+
         if dropout is not None:
             self.dropout = dropout
             self.drop_or_not = np.vectorize(self._drop_or_not_)
@@ -156,7 +157,7 @@ class NeuralNetwork:
             if self.task == 'Classification':
                 correct = len(train_targets[train_targets[:, 0] == tr_prediction.round()])
                 accuracy = correct / len(tr_prediction)
-                vl_accuracy.append(accuracy)
+                tr_accuracy.append(accuracy)
 
             # -------------------------------------------------------------------- #
             #                           VALIDATION                                 #

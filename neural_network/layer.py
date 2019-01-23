@@ -36,7 +36,7 @@ class Layer:
         self.input_size = input_size
 
         self.weights = None
-        self.bias = np.zeros((1, num_units))
+        self.bias = None
 
     def init_weights(self, fan_out):
         """
@@ -52,4 +52,5 @@ class Layer:
             if self.activation == 'sigmoid':
                 r = 4*r
             self.weights = np.random.uniform(low=-r, high=r, size=(self.input_size, self.num_units))
+            self.bias = np.zeros((1, self.num_units))
 

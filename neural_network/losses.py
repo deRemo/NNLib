@@ -20,6 +20,7 @@ def lms(y_true, y_pred):
     lms_err *= lms_err
     if y_true.shape[1] > 1:
         lms_err = np.sum(lms_err, axis=1)
+        return np.expand_dims(lms_err/2, axis=1)
     return lms_err/2
 
 

@@ -56,11 +56,11 @@ class GridSearch:
         for params in grid:
             try:
                 nn = NeuralNetwork()
-                for layer in params['layers']:
-                    if params['layers'].index(layer) == 0:
-                        nn.add_layer('dense', layer, params['activation'], dataset.shape[1])
+                for i in range(len(params['layers'])):
+                    if i == 0:
+                        nn.add_layer('dense', params['layers'][i], params['activation'], dataset.shape[1])
                     else:
-                        nn.add_layer('dense', layer, params['activation'])
+                        nn.add_layer('dense', params['layers'][i], params['activation'])
 
                 conf_acc = []
                 conf_loss = []

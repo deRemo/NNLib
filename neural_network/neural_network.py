@@ -143,6 +143,7 @@ class NeuralNetwork:
                 y_true = train_targets[j:j+train_slice]
                 y_pred = self._feed_forward_(train_set[j:j+train_slice, :])
                 self.optimizer.process_loss(y_true, y_pred, self.layers)
+
                 tr_epoch_loss[j:j+train_slice] = self.loss(y_true, y_pred)[:, 0]
                 if self.task == 'Classification':
                     tr_prediction[j:j+train_slice] = y_pred[:, 0]

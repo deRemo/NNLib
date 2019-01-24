@@ -6,7 +6,8 @@ def activations(f):
     act = {
         'sigmoid': (sigmoid, d_sigmoid),
         'tanh': (tanh, d_tanh),
-        'relu': (relu, d_relu)
+        'relu': (relu, d_relu),
+        'linear': (linear, d_linear)
     }
     return act[f]
 
@@ -34,9 +35,14 @@ def relu(x):
     else:
         return x
 
-
 def d_relu(x):
     if x <= 0:
         return 0
     else:
         return 1
+
+def linear(x):
+    return x
+
+def d_linear(x):
+    return 1

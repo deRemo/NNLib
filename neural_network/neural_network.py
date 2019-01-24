@@ -55,8 +55,9 @@ class NeuralNetwork:
         self.loss = loss_aux(loss)[0]
         self.optimizer = optimizer
         self.optimizer.init_optimizer(loss=loss, layers=self.layers)
-        if l2_lambda is not None:
+        if l2_lambda is not None and l2_lambda > 0:
             self.l2_lambda = l2_lambda
+
         if dropout is not None:
             self.dropout = dropout
             self.drop_or_not = np.vectorize(self._drop_or_not_)
@@ -142,6 +143,7 @@ class NeuralNetwork:
                 y_true = train_targets[j:j+train_slice]
                 y_pred = self._feed_forward_(train_set[j:j+train_slice, :])
                 self.optimizer.process_loss(y_true, y_pred, self.layers)
+
                 tr_epoch_loss[j:j+train_slice] = self.loss(y_true, y_pred)[:, 0]
                 if self.task == 'Classification':
                     tr_prediction[j:j+train_slice] = y_pred[:, 0]
@@ -156,7 +158,7 @@ class NeuralNetwork:
             if self.task == 'Classification':
                 correct = len(train_targets[train_targets[:, 0] == tr_prediction.round()])
                 accuracy = correct / len(tr_prediction)
-                vl_accuracy.append(accuracy)
+                tr_accuracy.append(accuracy)
 
             # -------------------------------------------------------------------- #
             #                           VALIDATION                                 #
@@ -271,8 +273,8 @@ class NeuralNetwork:
             train_indices = []
             val_indices = []
             for i in range(0, len(targets), step):
-                to_add = random.randint(0, step)
-                for j in range(step+1):
+                to_add = random.randint(0, step-1)
+                for j in range(step):
                     if j == to_add and to_add + i < len(targets):
                         val_indices.append(to_add + i)
                     elif j != to_add and j+i < len(targets):

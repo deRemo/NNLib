@@ -15,6 +15,8 @@ class SGD(GradientBasedOptimizer):
     """
     def __init__(self, lr_init=0.1, momentum=None, nesterov=False, lr_sched=None):
         super(SGD, self).__init__()
+        if nesterov and (momentum is None or momentum == 0):
+            raise NesterovError
         self.method = 'SGD'
         self.lr = lr_init
         self.lr_init = lr_init
@@ -70,3 +72,9 @@ class SGD(GradientBasedOptimizer):
         """
         if self.lr_sched is not None:
             self.lr = self.lr_sched.lr_update((self.lr, self.lr_init), epoch)
+
+
+class NesterovError(Exception):
+    def __init__(self):
+        # Call the base class constructor with the parameters it needs
+        super().__init__("Cannot use Nesterov's Accelerated Gradient with 0 momentum's value.")

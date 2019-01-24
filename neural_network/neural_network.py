@@ -84,7 +84,7 @@ class NeuralNetwork:
         return current_input
 
     def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=10,
-            save_stats=None, save_model='best_nn', verbose=False):
+            save_stats=None, save_model='best_nn', verbose=False, debug=False):
         """
         Fits the neural network on the given dataset with a training-validation cycle (the split is performed by the
         function itself with the proportions provided by test_size).
@@ -165,7 +165,9 @@ class NeuralNetwork:
             # -------------------------------------------------------------------- #
             y_true = valid_targets
             y_pred = self.predict(valid_set)
-            validation_loss = np.sum(self.loss(y_true, y_pred), axis=0)
+            validation_loss = np.sum(self.loss(y_true, y_pred), axis=0) / len(valid_targets)
+            if debug:
+                print("Validation loss at epoch ", i, " = ", validation_loss)
             vl_loss.append(validation_loss)
             if self.task == 'Classification':
                 correct = len(y_true[y_true == y_pred.round()])
@@ -187,7 +189,7 @@ class NeuralNetwork:
 
                 if verbose:
                     if self.task == 'Regression':
-                        print("Loss improved at epoch ", i, ": ", validation_loss / len(valid_targets))
+                        print("Loss improved at epoch ", i, ": ", validation_loss )
                     elif self.task == 'Classification':
                         print("Accuracy improved at epoch ", i, ": ", best_accuracy)
 

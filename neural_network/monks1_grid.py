@@ -14,8 +14,8 @@ param_grid = {
                (15, 5, 5, 1), (15, 10, 5, 1), (15, 10, 10, 1), (15, 15, 5, 1),
                (15, 15, 10, 1), (15, 15, 15, 1)],
     'activation': ['sigmoid'],
-    'l2_lambda': [0, 1e-3, 1e-4, 1e-5, 1e-6],
-    'lr': [0.1, 0.2, 0.5],
+    'l2_lambda': [0, 1e-4, 1e-5, 1e-6],
+    'lr': [0.1, 0.2],
     'epoch': [5000],
     'patience': [200],
     'test_size': [0.3],
@@ -27,7 +27,7 @@ param_grid = {
                  StepDecayScheduler(drop=0.9, epochs_drop=35)]
 }
 
-gs = GridSearch(tuning_params=param_grid)
+gs = GridSearch(tuning_params=param_grid, random_search=500)
 results = gs.fit(train_set, train_targets)
 with open('../monks/monks_1_results.pkl', 'wb') as output:
     pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)

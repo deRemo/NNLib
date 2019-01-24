@@ -25,7 +25,7 @@ param_grid = {
                  StepDecayScheduler(drop=0.9, epochs_drop=35)]
 }
 
-gs = GridSearch(task='Regression', tuning_params=param_grid, restarts=30, random_search=1500)
+gs = GridSearch(task='Regression', tuning_params=param_grid, restarts=20, random_search=500)
 results = gs.fit(train_set, train_targets)
 with open('../cup/cup_random_results.pkl', 'wb') as output:
     pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)

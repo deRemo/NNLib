@@ -1,4 +1,4 @@
 .ipynb_checkpoints/
 .vscode/
 .idea/
-./__pycache__/
+./neural_network/__pycache__/

@@ -13,6 +13,7 @@ param_grid = {
     'layers': layers,
     'activation': ['sigmoid'],
     'lr': [0.001, 0.0005, 0.0001],
+    'l2_lambda': [None],
     'epoch': [5000],
     'patience': [200],
     'test_size': [0.3],

@@ -1,31 +1,29 @@
 from lr_schedulers import StepDecayScheduler
 from grid_search import GridSearch
-import pickle
 import numpy as np
+import sys
 
 
 train_set = np.genfromtxt("../cup/ML-CUP18-TR.csv", delimiter=",")[:, 1:-2]
 train_targets = np.genfromtxt("../cup/ML-CUP18-TR.csv", delimiter=",")[:, -2:]
 
+n_units = int(sys.argv[1])
+layers = [(n_units, n_units, 2), (n_units, 2*n_units, 2)]
 param_grid = {
-    'layers': [(5, 5, 2), (10, 5, 2), (10, 10, 2), (15, 5, 2), (15, 10, 2), (15, 15, 2),
-               (5, 5, 5, 2), (10, 5, 5, 2), (10, 10, 5, 2), (10, 10, 10, 2),
-               (15, 5, 5, 2), (15, 10, 5, 2), (15, 10, 10, 2), (15, 15, 5, 2),
-               (15, 15, 10, 2), (15, 15, 15, 2)],
+    'layers': layers,
     'activation': ['sigmoid'],
-    'l2_lambda': [0, 1e-3, 1e-4, 1e-5, 1e-6],
-    'lr': [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5],
+    'lr': [0.001, 0.0005, 0.0001],
+    'l2_lambda': [None],
     'epoch': [5000],
     'patience': [200],
     'test_size': [0.3],
-    'batch_size': [8, 16, 32, len(train_set)],
-    'momentum': [0, 0.7, 0.8, 0.9],
+    'batch_size': [64, 128],
+    'momentum': [0.9],
+    'dropout': [None, [0.5, 0.5, 0.5]],
     'nesterov': [False, True],
-    'lr_sched': [StepDecayScheduler(drop=0.2, epochs_drop=5), StepDecayScheduler(drop=0.5, epochs_drop=20),
-                 StepDecayScheduler(drop=0.9, epochs_drop=35)]
+    'lr_sched': [StepDecayScheduler(drop=1, epochs_drop=1), StepDecayScheduler(drop=0.7, epochs_drop=50),
+                 StepDecayScheduler(drop=0.9, epochs_drop=100)]
 }
 
-gs = GridSearch(task='Regression', tuning_params=param_grid, restarts=20, random_search=500)
-results = gs.fit(train_set, train_targets)
-with open('../cup/cup_random_results.pkl', 'wb') as output:
-    pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)
+gs = GridSearch(task='Regression', tuning_params=param_grid, restarts=10)
+gs.fit(train_set, train_targets, checkpoints='../cup/'+str(n_units)+'units_cup_results')

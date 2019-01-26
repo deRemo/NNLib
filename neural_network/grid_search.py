@@ -4,7 +4,12 @@ from losses import loss_aux
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import ParameterGrid, StratifiedKFold, StratifiedShuffleSplit
-import random, copy, string, os, shutil
+import random
+import copy
+import string
+import os
+import shutil
+import pickle
 
 
 class GridSearch:
@@ -34,11 +39,12 @@ class GridSearch:
         self.folds = folds
         self.restarts = restarts
 
-    def fit(self, dataset, targets):
+    def fit(self, dataset, targets, checkpoints=None):
         """
         Fit the estimator with the given dataset and targets
         :param dataset: data on which the model will fit
         :param targets: ground_truth values of the given data
+        :param checkpoints: name of the file on which to save current results
         """
         dir = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
         dir = '.tmp'+dir+'/'
@@ -60,7 +66,10 @@ class GridSearch:
                     if i == 0:
                         nn.add_layer('dense', params['layers'][i], params['activation'], dataset.shape[1])
                     else:
-                        nn.add_layer('dense', params['layers'][i], params['activation'])
+                        if i == len(params['layers'])-1 and self.task == 'Regression':
+                            nn.add_layer('dense', params['layers'][i], 'linear')
+                        else:
+                            nn.add_layer('dense', params['layers'][i], params['activation'])
 
                 conf_acc = []
                 conf_loss = []
@@ -118,6 +127,9 @@ class GridSearch:
                     results.append((mean_acc, mean_loss, {x: params[x] for x in list(params.keys())}))
                 elif self.task == 'Regression':
                     results.append((mean_loss, {x: params[x] for x in list(params.keys())}))
+                if checkpoints is not None:
+                    with open(checkpoints+'.pkl', 'wb') as output:
+                        pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)
 
             except NesterovError:
                 continue

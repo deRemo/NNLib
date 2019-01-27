@@ -2,4 +2,5 @@
 .vscode/
 .idea/
 ./neural_network/__pycache__/
+.neural_network/.idea/
 ./__pycache__/

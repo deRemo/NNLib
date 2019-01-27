@@ -1,4 +1,3 @@
-from lr_schedulers import StepDecayScheduler
 from grid_search import GridSearch
 import numpy as np
 import sys
@@ -21,8 +20,7 @@ param_grid = {
     'momentum': [0.9],
     'dropout': [None, [0.5, 0.5, 0.5]],
     'nesterov': [False, True],
-    'lr_sched': [StepDecayScheduler(drop=1, epochs_drop=1), StepDecayScheduler(drop=0.7, epochs_drop=50),
-                 StepDecayScheduler(drop=0.9, epochs_drop=100)]
+    'lr_sched': [(1, 1), (0.7, 50), (0.9, 100)]
 }
 
 gs = GridSearch(task='Regression', tuning_params=param_grid, restarts=10)

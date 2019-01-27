@@ -5,8 +5,8 @@ import numpy as np
 
 
 # MONK PROBLEMS
-train_set = np.genfromtxt("../monks/monks1-train.txt", delimiter=" ", dtype="int")[:,1:-1]
-train_targets = np.genfromtxt("../monks/monks1-train.txt", delimiter=" ", dtype="int")[:,:1]
+train_set = np.genfromtxt("../monks/monks1-train.txt", delimiter=" ", dtype="int")[:, 1:-1]
+train_targets = np.genfromtxt("../monks/monks1-train.txt", delimiter=" ", dtype="int")[:, :1]
 
 param_grid = {
     'layers': [(5, 5, 1), (10, 5, 1), (10, 10, 1), (15, 5, 1), (15, 10, 1), (15, 15, 1),

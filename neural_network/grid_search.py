@@ -1,9 +1,9 @@
 from neural_network import NeuralNetwork
 from sgd import SGD, NesterovError
+from lr_schedulers import StepDecayScheduler
 from losses import loss_aux
 import numpy as np
 import metrics
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import ParameterGrid, StratifiedKFold, StratifiedShuffleSplit
 import random
 import copy
@@ -108,7 +108,8 @@ class GridSearch:
                                    optimizer=SGD(lr_init=params['lr'],
                                                  momentum=params['momentum'],
                                                  nesterov=params['nesterov'],
-                                                 lr_sched=params['lr_sched']))
+                                                 lr_sched=StepDecayScheduler(drop=params['lr_sched'][0],
+                                                                             epochs_drop=params['lr_sched'][1])))
 
                         curr_model, curr_metric, best_epoch = nn.fit(X_train, Y_train,
                                                                      batch_size=params['batch_size'],

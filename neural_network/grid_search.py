@@ -90,7 +90,8 @@ class GridSearch:
                             'metric_stats': [],
                             'test_stats': [],
                             'vl_stats': [],
-                            'tr_stats': []}
+                            'tr_stats': [],
+                            'fold_sizes': []}
 
                 if self.task == 'Classification':
                     folds = sf.split(dataset, targets)
@@ -129,7 +130,7 @@ class GridSearch:
 
                     Y_pred = nested_best.predict(X_test)
                     if self.metric == 'loss':
-                        curr_metric = self.loss(Y_test, Y_pred)
+                        curr_metric = np.sum(self.loss(Y_test, Y_pred), axis=0)/len(Y_test)
                     else:
                         curr_metric = metrics.metric_computation(self.metric, Y_test, Y_pred)
 

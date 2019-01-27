@@ -59,8 +59,8 @@ class NeuralNetwork:
         if metric is None:
             if self.task == 'Classification':
                 self.metric = 'accuracy'
-            else:
-                self.metric = ''
+            elif self.task == 'Regression':
+                self.metric = 'loss'
         else:
             self.metric = metric
         self.optimizer = optimizer
@@ -146,7 +146,7 @@ class NeuralNetwork:
             while j < len(train_set):
                 train_slice = min(j+buffer_size, (curr_batch*batch_size)-j, len(train_set)-j)
                 y_true = train_targets[j:j+train_slice]
-                y_pred = self._feed_forward_(train_set[j:j+train_slice, :])
+                y_pred = self._feed_forward_(train_set[j:j+train_slice])
                 self.optimizer.process_loss(y_true, y_pred, self.layers)
 
                 tr_prediction[j:j+train_slice] = y_pred
@@ -165,7 +165,7 @@ class NeuralNetwork:
             y_pred = self.predict(valid_set)
             vl_epochs.append(np.concatenate([y_true, y_pred], axis=1))
             if self.metric == 'loss':
-                curr_metric = self.loss(y_true, y_pred)
+                curr_metric = np.sum(self.loss(y_true, y_pred), axis=0)/len(y_true)
             else:
                 curr_metric = metrics.metric_computation(self.metric, y_true, y_pred)
 
@@ -189,7 +189,7 @@ class NeuralNetwork:
         if save_pred is not None:
             np.save(save_pred+"_tr_predictions.npy", np.array(tr_epochs))
             np.save(save_pred+"_vl_predictions.npy", np.array(vl_epochs))
-        return best_model, best_metric, best_epoch
+        return best_model, best_metric[0], best_epoch
 
     def _weights_update_(self):
         """

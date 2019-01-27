@@ -2,6 +2,7 @@ from neural_network import NeuralNetwork
 from sgd import SGD, NesterovError
 from losses import loss_aux
 import numpy as np
+import metrics
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import ParameterGrid, StratifiedKFold, StratifiedShuffleSplit
 import random
@@ -26,7 +27,8 @@ class GridSearch:
             random_search(int) - determines the number of random configurations to be tested. If None, a whole grid
                 search will be performed.
     """
-    def __init__(self, task='Classification', loss='LMS', tuning_params=None, folds=3, restarts=15, random_search=None):
+    def __init__(self, task='Classification', loss='LMS', tuning_params=None, folds=3, restarts=15, random_search=None,
+                 metric=None, statistics=None):
         self.task = task
         self.loss_name = loss
         self.loss = loss_aux(loss)[0]
@@ -38,6 +40,20 @@ class GridSearch:
             self.random = False
         self.folds = folds
         self.restarts = restarts
+        if metric is None:
+            if task == 'Classification':
+                self.metric = 'accuracy'
+            elif task == 'Regression':
+                self.metric = 'loss'
+        else:
+            self.metric = metric
+        if statistics is None:
+            if task == 'Classification':
+                self.statistics = ['loss', 'accuracy']
+            elif task == 'Regression':
+                self.statistics = ['loss']
+        else:
+            self.statistics = statistics
 
     def fit(self, dataset, targets, checkpoints=None):
         """
@@ -70,17 +86,21 @@ class GridSearch:
                             nn.add_layer('dense', params['layers'][i], 'linear')
                         else:
                             nn.add_layer('dense', params['layers'][i], params['activation'])
+                curr_res = {'params': params,
+                            'metric_stats': [],
+                            'test_stats': [],
+                            'vl_stats': [],
+                            'tr_stats': []}
 
-                conf_acc = []
-                conf_loss = []
                 if self.task == 'Classification':
                     folds = sf.split(dataset, targets)
                 for train_index, test_index in folds:
                     X_train, X_test = dataset[train_index], dataset[test_index]
                     Y_train, Y_test = targets[train_index], targets[test_index]
                     nested_best = None
-                    nested_best_acc = -1
-                    nested_best_loss = float("+inf")
+                    nested_best_metric = None
+                    nested_tr_pred = None
+                    nested_vl_pred = None
                     for i in range(self.restarts):
                         nn.compile(task=self.task,
                                    loss=self.loss_name,
@@ -90,43 +110,52 @@ class GridSearch:
                                                  nesterov=params['nesterov'],
                                                  lr_sched=params['lr_sched']))
 
-                        curr_model = nn.fit(X_train, Y_train,
-                                            batch_size=params['batch_size'],
-                                            test_size=params['test_size'],
-                                            epochs=params['epoch'],
-                                            patience=params['patience'],
-                                            save_stats=dir+'tmp_gs',
-                                            save_model=None)
+                        curr_model, curr_metric, best_epoch = nn.fit(X_train, Y_train,
+                                                                     batch_size=params['batch_size'],
+                                                                     test_size=params['test_size'],
+                                                                     epochs=params['epoch'],
+                                                                     patience=params['patience'],
+                                                                     save_pred=dir+'tmp_gs',
+                                                                     save_model=None)
 
-                        loss_array = np.load(dir+'tmp_gs_vl_loss.npy')
-                        if self.task == 'Classification':
-                            acc_array = np.load(dir+'tmp_gs_vl_accuracy.npy')
-                            index = np.argmax(acc_array)
-                            acc = acc_array[index]
-                        else:
-                            index = np.argmin(loss_array)
-                        loss = loss_array[index]
-                        if (self.task == 'Classification' and acc > nested_best_acc) or \
-                                (self.task == 'Regression' and loss < nested_best_loss):
-                            if self.task == 'Classification':
-                                nested_best_acc = acc
-                            nested_best_loss = loss
+                        nested_best_metric = metrics.metric_improve(self.metric, nested_best_metric, curr_metric)
+                        if nested_best_metric[1]:
+                            nested_tr_pred = np.load(dir + 'tmp_gs_tr_predictions.npy')[best_epoch]
+                            nested_vl_pred = np.load(dir + 'tmp_gs_vl_predictions.npy')[best_epoch]
                             nested_best = copy.deepcopy(curr_model)
-                            if (self.task == 'Classification' and nested_best_acc == 1) or \
-                                    (self.task == 'Regression' and nested_best_loss == 0):
+                            if nested_best_metric[2]:
                                 break
 
                     Y_pred = nested_best.predict(X_test)
-                    if self.task == 'Classification':
-                        conf_acc.append(accuracy_score(Y_test, Y_pred))
-                        mean_acc = np.mean(conf_acc)
-                    conf_loss.append(np.mean(self.loss(Y_test, Y_pred)))
-                mean_loss = np.mean(conf_loss)
+                    if self.metric == 'loss':
+                        curr_metric = self.loss(Y_test, Y_pred)
+                    else:
+                        curr_metric = metrics.metric_computation(self.metric, Y_test, Y_pred)
 
-                if self.task == 'Classification':
-                    results.append((mean_acc, mean_loss, {x: params[x] for x in list(params.keys())}))
-                elif self.task == 'Regression':
-                    results.append((mean_loss, {x: params[x] for x in list(params.keys())}))
+                    curr_res['metric_stats'].append(curr_metric)
+                    tr_stats = []
+                    vl_stats = []
+                    test_stats = []
+                    for stat in self.statistics:
+                        if stat == 'loss':
+                            tr_stats.append(self.loss(nested_tr_pred[:, :targets.shape[1]],
+                                                      nested_tr_pred[:, targets.shape[1]:]))
+                            vl_stats.append(self.loss(nested_vl_pred[:, :targets.shape[1]],
+                                                      nested_vl_pred[:, targets.shape[1]:]))
+                            test_stats.append(self.loss(Y_test, Y_pred))
+                        else:
+                            tr_stats.append(metrics.metric_computation(stat,
+                                                                       nested_tr_pred[:, :targets.shape[1]],
+                                                                       nested_tr_pred[:, targets.shape[1]:]))
+                            vl_stats.append(metrics.metric_computation(stat,
+                                                                       nested_vl_pred[:, :targets.shape[1]],
+                                                                       nested_vl_pred[:, targets.shape[1]:]))
+                            test_stats.append(metrics.metric_computation(stat, Y_test, Y_pred))
+                    curr_res['tr_stats'].append(tr_stats)
+                    curr_res['vl_stats'].append(vl_stats)
+                    curr_res['test_stats'].append(test_stats)
+
+                results.append(curr_res)
                 if checkpoints is not None:
                     with open(checkpoints+'.pkl', 'wb') as output:
                         pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)
@@ -137,6 +166,12 @@ class GridSearch:
         return results
 
     def split_regression(self, dataset, targets):
+        """
+        Splits the dataset for a regression task
+        :param dataset: dataset to be splitted
+        :param targets: targets of the dataset
+        :return: indices of every fold, ordered dataset, ordered targets
+        """
         index = np.argsort(targets[:, 0])
         dataset, targets = dataset[index], targets[index]
         indices = [([], []) for _ in range(self.folds)]
@@ -149,3 +184,4 @@ class GridSearch:
                             elif k != j:
                                 indices[j][0].append(i+k)
         return indices, dataset, targets
+

@@ -1,6 +1,7 @@
 import numpy as np
 from layer import Layer
 from losses import loss_aux
+import metrics
 
 import pickle
 from copy import deepcopy
@@ -28,6 +29,7 @@ class NeuralNetwork:
         self.l2_lambda = None
         self.dropout = None
         self.drop_or_not = None
+        self.metric = None
 
     def add_layer(self, conn, num_units, activation, input_size=None):
         """
@@ -42,17 +44,25 @@ class NeuralNetwork:
                 input_size = self.layers[-1].num_units
             self.layers.append(Layer(num_units, activation, input_size))
 
-    def compile(self, task='Classification', loss='LMS', optimizer=None, l2_lambda=None, dropout=None):
+    def compile(self, task='Classification', loss='LMS', metric=None, optimizer=None, l2_lambda=None, dropout=None):
         """
         Initializes the model for the training.
         :param task: task to be performed by the model ('Classification' or 'Regression')
         :param loss: loss function used by the model
+        :param metric: the metric to be used for the model validation
         :param optimizer: optimizer used during the training
         :param l2_lambda: defines the lambda parameter for L2 regularization. None if not regularized.
         :param dropout: list of the probabilities of dropout for each layer
         """
         self.task = task
         self.loss = loss_aux(loss)[0]
+        if metric is None:
+            if self.task == 'Classification':
+                self.metric = 'accuracy'
+            else:
+                self.metric = ''
+        else:
+            self.metric = metric
         self.optimizer = optimizer
         self.optimizer.init_optimizer(loss=loss, layers=self.layers)
         if l2_lambda is not None and l2_lambda > 0:
@@ -84,7 +94,7 @@ class NeuralNetwork:
         return current_input
 
     def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=10,
-            save_stats=None, save_model=None, verbose=False):
+            save_pred=None, save_model=None, verbose=False):
         """
         Fits the neural network on the given dataset with a training-validation cycle (the split is performed by the
         function itself with the proportions provided by test_size).
@@ -104,7 +114,7 @@ class NeuralNetwork:
         :param test_size: portion of dataset to be held for validation
         :param epochs: number of epochs of training
         :param patience: number of epochs without gain before calling early stopping
-        :param save_stats: whether or not to save the statistics
+        :param save_pred: whether or not to save the predictions
         :param save_model: whether or not to save in memory the best model
         :param verbose: whether or not print informations about training process
         :return: the best model
@@ -115,24 +125,19 @@ class NeuralNetwork:
             else:
                 buffer_size = 2048
         iter_no_gain = 0
-        best_loss = float('Inf')
-        best_accuracy = float(0)
+        best_metric = None
         best_model = None
+        best_epoch = 0
 
-        tr_loss = []
-        vl_loss = []
-        if self.task == 'Classification':
-            tr_accuracy = []
-            vl_accuracy = []
-
+        tr_epochs = []
+        vl_epochs = []
         train_set, valid_set, train_targets, valid_targets = self._prepare_dataset_fit_(dataset, targets, test_size)
         train_indices = list(range(len(train_set)))
         for i in range(1, epochs+1):
             # -------------------------------------------------------------------- #
             #                            TRAINING                                  #
             # -------------------------------------------------------------------- #
-            tr_epoch_loss = np.zeros((len(train_set),))
-            tr_prediction = np.zeros((len(train_set),))
+            tr_prediction = np.zeros((len(train_set), train_targets.shape[1]))
             random.shuffle(train_indices)
             train_set, train_targets = train_set[train_indices], train_targets[train_indices]
 
@@ -144,69 +149,47 @@ class NeuralNetwork:
                 y_pred = self._feed_forward_(train_set[j:j+train_slice, :])
                 self.optimizer.process_loss(y_true, y_pred, self.layers)
 
-                tr_epoch_loss[j:j+train_slice] = self.loss(y_true, y_pred)[:, 0]
-                if self.task == 'Classification':
-                    tr_prediction[j:j+train_slice] = y_pred[:, 0]
+                tr_prediction[j:j+train_slice] = y_pred
                 j += train_slice
                 if (j != 0 and j % batch_size == 0) or j == len(train_set):
                     self._weights_update_()
                     curr_batch += 1
 
             self.optimizer.epoch_change(i)
-
-            tr_loss.append(np.sum(tr_epoch_loss, axis=0))
-            if self.task == 'Classification':
-                correct = len(train_targets[train_targets[:, 0] == tr_prediction.round()])
-                accuracy = correct / len(tr_prediction)
-                tr_accuracy.append(accuracy)
+            tr_epochs.append(np.concatenate([train_targets, tr_prediction], axis=1))
 
             # -------------------------------------------------------------------- #
             #                           VALIDATION                                 #
             # -------------------------------------------------------------------- #
             y_true = valid_targets
             y_pred = self.predict(valid_set)
-            validation_loss = np.sum(self.loss(y_true, y_pred), axis=0) / len(valid_targets)
-            vl_loss.append(validation_loss)
-            if self.task == 'Classification':
-                correct = len(y_true[y_true == y_pred.round()])
-                accuracy = correct/len(y_true)
-                vl_accuracy.append(accuracy)
+            vl_epochs.append(np.concatenate([y_true, y_pred], axis=1))
+            if self.metric == 'loss':
+                curr_metric = self.loss(y_true, y_pred)
+            else:
+                curr_metric = metrics.metric_computation(self.metric, y_true, y_pred)
 
-            if (self.task == 'Regression' and validation_loss < best_loss) or \
-                    (self.task == 'Classification' and accuracy > best_accuracy):
-
-                if self.task == 'Classification' and accuracy > best_accuracy:
-                    best_accuracy = accuracy
-                if self.task == 'Regression' and validation_loss < best_loss:
-                    best_loss = validation_loss
-
+            best_metric = metrics.metric_improve(self.metric, best_metric, curr_metric)
+            if best_metric[1]:
+                best_epoch = i-1
                 best_model = deepcopy(self)
                 if save_model is not None:
                     with open(save_model + '.pkl', 'wb') as output:
                         pickle.dump(self, output, pickle.HIGHEST_PROTOCOL)
-
-                if verbose:
-                    if self.task == 'Regression':
-                        print("Loss improved at epoch ", i, ": ", validation_loss )
-                    elif self.task == 'Classification':
-                        print("Accuracy improved at epoch ", i, ": ", best_accuracy)
-
-                if (self.task == 'Regression' and best_loss == 0) or \
-                        (self.task == 'Classification' and best_accuracy == 1.0):
+                if best_metric[2]:
                     break
+                if verbose:
+                        print(self.metric, "improved at epoch", i, ": ", best_metric[0])
                 iter_no_gain = 0
             else:
                 iter_no_gain += 1
                 if patience is not None and iter_no_gain == patience:
                     break
-        if save_stats is not None:
-            np.save(save_stats+"_tr_loss.npy", np.array(tr_loss))
-            np.save(save_stats+"_vl_loss.npy", np.array(vl_loss))
-            if self.task == 'Classification':
-                np.save(save_stats+"_tr_accuracy.npy", np.array(tr_accuracy))
-                np.save(save_stats+"_vl_accuracy.npy", np.array(vl_accuracy))
 
-        return best_model
+        if save_pred is not None:
+            np.save(save_pred+"_tr_predictions.npy", np.array(tr_epochs))
+            np.save(save_pred+"_vl_predictions.npy", np.array(vl_epochs))
+        return best_model, best_metric, best_epoch
 
     def _weights_update_(self):
         """
@@ -231,7 +214,7 @@ class NeuralNetwork:
         """
         prediction = batch
         for curr_layer in self.layers:
-            prediction = np.dot(prediction, curr_layer.weights) + curr_layer.bias  # dot(in,w)+bias
+            prediction = np.dot(prediction, curr_layer.weights) + curr_layer.bias
             prediction = curr_layer.f(prediction)
 
         if self.task == 'Classification':

@@ -9,7 +9,7 @@ class Rprop(GradientBasedOptimizer):
         self.method = 'RPROP'
         self.lr_low = lr_low
         self.lr_high = lr_high
-        self.delta_min = 1e-6
+        self.delta_min = 1e-12
         self.delta_0 = delta_0
         self.delta_max = delta_max
         self.prev_steps = None

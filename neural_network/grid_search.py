@@ -14,18 +14,25 @@ import pickle
 
 def build_by_params(task, params, input_size):
     """
-    Builds a neural network by passing the parameter grid
+    Builds a neural network by passing all the parameters at ounce
     :task - the task to be performed (Classification of Regression)
-    :grid - parameters to tune
+    :params - parameters to build the neural network with
     :input_size - the input size of the input layer
     """
     if params is None or task is None or input_size is None:
         print("You need to pass a valid parameter grid, task or input size")
         return -1
     
+    #params type check
     for param in params:
-        if type(param) is list:
-            print("Don't pass lists, use tuples instead when specifying the lr_sched or the layers")
+        if type(params[param]) is list and param != "layers" and param != "dropout":
+            if type(params[param][0]) is list:
+                print("no list of list (problem in ", param, ")")
+            else:
+                print("only layers or dropout can be lists (problem in ", param, ")")
+            return -1
+        elif type(params[param]) is tuple and param != 'lr_sched':
+            print("only lr_sched as tuple (problem in ", param, ")")
             return -1
 
     nn = NeuralNetwork()

@@ -140,11 +140,12 @@ class GridSearch:
                     test_stats = []
                     for stat in self.statistics:
                         if stat == 'loss':
-                            tr_stats.append(self.loss(nested_tr_pred[:, :targets.shape[1]],
-                                                      nested_tr_pred[:, targets.shape[1]:]))
-                            vl_stats.append(self.loss(nested_vl_pred[:, :targets.shape[1]],
-                                                      nested_vl_pred[:, targets.shape[1]:]))
-                            test_stats.append(self.loss(Y_test, Y_pred))
+
+                            tr_stats.append(np.mean(self.loss(nested_tr_pred[:, :targets.shape[1]],
+                                                              nested_tr_pred[:, targets.shape[1]:])))
+                            vl_stats.append(np.mean(self.loss(nested_vl_pred[:, :targets.shape[1]],
+                                                              nested_vl_pred[:, targets.shape[1]:])))
+                            test_stats.append(np.mean(self.loss(Y_test, Y_pred)))
                         else:
                             tr_stats.append(metrics.metric_computation(stat,
                                                                        nested_tr_pred[:, :targets.shape[1]],

@@ -56,17 +56,23 @@ class GridSearch:
             self.statistics = statistics
 
     def fit(self, dataset, targets, checkpoints=None):
+        if self.folds is not None and self.folds > 0:
+            return self._fit_split_(dataset, targets, checkpoints)
+        else:
+            return self._fit_no_split(dataset, targets, checkpoints)
+
+    def _fit_split_(self, dataset, targets, checkpoints):
         """
-        Fit the estimator with the given dataset and targets
-        :param dataset: data on which the model will fit
-        :param targets: ground_truth values of the given data
-        :param checkpoints: name of the file on which to save current results
-        """
+                Fit the estimator with the given dataset and targets
+                :param dataset: data on which the model will fit
+                :param targets: ground_truth values of the given data
+                :param checkpoints: name of the file on which to save current results
+                """
         dir = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
-        dir = '.tmp'+dir+'/'
+        dir = '.tmp' + dir + '/'
         os.mkdir(dir)
         grid = self.grid
-        if self.folds is not None:
+        if self.folds is not None or self.folds != 0:
             if self.task == 'Classification':
                 if self.folds > 1:
                     sf = StratifiedKFold(n_splits=self.folds, shuffle=True, random_state=0)
@@ -82,7 +88,7 @@ class GridSearch:
                     if i == 0:
                         nn.add_layer('dense', params['layers'][i], params['activation'], dataset.shape[1])
                     else:
-                        if i == len(params['layers'])-1 and self.task == 'Regression':
+                        if i == len(params['layers']) - 1 and self.task == 'Regression':
                             nn.add_layer('dense', params['layers'][i], 'linear')
                         else:
                             nn.add_layer('dense', params['layers'][i], params['activation'])
@@ -90,8 +96,7 @@ class GridSearch:
                             'metric_stats': [],
                             'test_stats': [],
                             'vl_stats': [],
-                            'tr_stats': [],
-                            'fold_sizes': []}
+                            'tr_stats': []}
 
                 if self.task == 'Classification':
                     folds = sf.split(dataset, targets)
@@ -117,7 +122,7 @@ class GridSearch:
                                                                      test_size=params['test_size'],
                                                                      epochs=params['epoch'],
                                                                      patience=params['patience'],
-                                                                     save_pred=dir+'tmp_gs',
+                                                                     save_pred=dir + 'tmp_gs',
                                                                      save_model=None)
 
                         nested_best_metric = metrics.metric_improve(self.metric, nested_best_metric, curr_metric)
@@ -130,7 +135,7 @@ class GridSearch:
 
                     Y_pred = nested_best.predict(X_test)
                     if self.metric == 'loss':
-                        curr_metric = np.sum(self.loss(Y_test, Y_pred), axis=0)/len(Y_test)
+                        curr_metric = np.sum(self.loss(Y_test, Y_pred), axis=0) / len(Y_test)
                     else:
                         curr_metric = metrics.metric_computation(self.metric, Y_test, Y_pred)
 
@@ -160,7 +165,90 @@ class GridSearch:
 
                 results.append(curr_res)
                 if checkpoints is not None:
-                    with open(checkpoints+'.pkl', 'wb') as output:
+                    with open(checkpoints + '.pkl', 'wb') as output:
+                        pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)
+
+            except NesterovError:
+                continue
+        shutil.rmtree(dir)
+        return results
+
+    def _fit_no_split(self, dataset, targets, checkpoints):
+        """
+                Fit the estimator with the given dataset and targets
+                :param dataset: data on which the model will fit
+                :param targets: ground_truth values of the given data
+                :param checkpoints: name of the file on which to save current results
+                """
+        dir = ''.join(random.choices(string.ascii_lowercase + string.digits, k=16))
+        dir = '.tmp' + dir + '/'
+        os.mkdir(dir)
+        grid = self.grid
+        results = []
+        for params in grid:
+            try:
+                nn = NeuralNetwork()
+                for i in range(len(params['layers'])):
+                    if i == 0:
+                        nn.add_layer('dense', params['layers'][i], params['activation'], dataset.shape[1])
+                    else:
+                        if i == len(params['layers']) - 1 and self.task == 'Regression':
+                            nn.add_layer('dense', params['layers'][i], 'linear')
+                        else:
+                            nn.add_layer('dense', params['layers'][i], params['activation'])
+                curr_res = {'params': params,
+                            'vl_stats': [],
+                            'tr_stats': []}
+
+                nested_best_metric = None
+                nested_tr_pred = None
+                nested_vl_pred = None
+                for i in range(self.restarts):
+                    nn.compile(task=self.task,
+                               loss=self.loss_name,
+                               l2_lambda=params['l2_lambda'],
+                               optimizer=SGD(lr_init=params['lr'],
+                                             momentum=params['momentum'],
+                                             nesterov=params['nesterov'],
+                                             lr_sched=StepDecayScheduler(drop=params['lr_sched'][0],
+                                                                         epochs_drop=params['lr_sched'][1])))
+
+                    curr_model, curr_metric, best_epoch = nn.fit(dataset, targets,
+                                                                 batch_size=params['batch_size'],
+                                                                 test_size=params['test_size'],
+                                                                 epochs=params['epoch'],
+                                                                 patience=params['patience'],
+                                                                 save_pred=dir + 'tmp_gs',
+                                                                 save_model=None)
+
+                    nested_best_metric = metrics.metric_improve(self.metric, nested_best_metric, curr_metric)
+                    if nested_best_metric[1]:
+                        nested_tr_pred = np.load(dir + 'tmp_gs_tr_predictions.npy')[best_epoch]
+                        nested_vl_pred = np.load(dir + 'tmp_gs_vl_predictions.npy')[best_epoch]
+                        if nested_best_metric[2]:
+                            break
+
+                tr_stats = []
+                vl_stats = []
+                for stat in self.statistics:
+                    if stat == 'loss':
+                        tr_stats.append(np.mean(self.loss(nested_tr_pred[:, :targets.shape[1]],
+                                                          nested_tr_pred[:, targets.shape[1]:])))
+                        vl_stats.append(np.mean(self.loss(nested_vl_pred[:, :targets.shape[1]],
+                                                          nested_vl_pred[:, targets.shape[1]:])))
+                    else:
+                        tr_stats.append(metrics.metric_computation(stat,
+                                                                   nested_tr_pred[:, :targets.shape[1]],
+                                                                   nested_tr_pred[:, targets.shape[1]:]))
+                        vl_stats.append(metrics.metric_computation(stat,
+                                                                   nested_vl_pred[:, :targets.shape[1]],
+                                                                   nested_vl_pred[:, targets.shape[1]:]))
+                curr_res['tr_stats'].append(tr_stats)
+                curr_res['vl_stats'].append(vl_stats)
+
+                results.append(curr_res)
+                if checkpoints is not None:
+                    with open(checkpoints + '.pkl', 'wb') as output:
                         pickle.dump(results, output, pickle.HIGHEST_PROTOCOL)
 
             except NesterovError:

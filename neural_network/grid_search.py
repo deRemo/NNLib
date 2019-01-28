@@ -12,6 +12,41 @@ import os
 import shutil
 import pickle
 
+def build_by_params(task, params, input_size):
+    """
+    Builds a neural network by passing the parameter grid
+    :task - the task to be performed (Classification of Regression)
+    :grid - parameters to tune
+    :input_size - the input size of the input layer
+    """
+    if params is None or task is None or input_size is None:
+        print("You need to pass a valid parameter grid, task or input size")
+        return -1
+    
+    for param in params:
+        if type(param) is list:
+            print("Don't pass lists, use tuples instead when specifying the lr_sched or the layers")
+            return -1
+
+    nn = NeuralNetwork()
+    for i in range(len(params['layers'])):
+        if i == 0:
+            nn.add_layer('dense', params['layers'][i], params['activation'], input_size)
+        else:
+            if i == len(params['layers']) - 1 and task == 'Regression':
+                nn.add_layer('dense', params['layers'][i], 'linear')
+            else:
+                nn.add_layer('dense', params['layers'][i], params['activation'])
+
+    nn.compile(task=task,
+                dropout=params['dropout'],
+                l2_lambda=params['l2_lambda'],
+                optimizer=SGD(lr_init=params['lr'],
+                momentum=params['momentum'],
+                nesterov=params['nesterov'],
+                lr_sched=StepDecayScheduler(drop=params['lr_sched'][0],
+                epochs_drop=params['lr_sched'][1])))
+    return nn
 
 class GridSearch:
     """
@@ -275,4 +310,6 @@ class GridSearch:
                             elif k != j:
                                 indices[j][0].append(i+k)
         return indices, dataset, targets
+        
+
 

@@ -146,6 +146,7 @@ class GridSearch:
                         nn.compile(task=self.task,
                                    loss=self.loss_name,
                                    l2_lambda=params['l2_lambda'],
+                                   dropout=params['dropout'],
                                    optimizer=SGD(lr_init=params['lr'],
                                                  momentum=params['momentum'],
                                                  nesterov=params['nesterov'],

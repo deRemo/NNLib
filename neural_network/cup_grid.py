@@ -18,10 +18,10 @@ param_grid = {
     'test_size': [0.3],
     'batch_size': [64, 128],
     'momentum': [0.9],
-    'dropout': [None, [0.5, 0.5, 0.5]],
+    'dropout': [[0.5, 0.5, 0.5]],
     'nesterov': [False, True],
     'lr_sched': [(1, 1), (0.7, 50), (0.9, 100)]
 }
 
 gs = GridSearch(task='Regression', tuning_params=param_grid, restarts=10)
-gs.fit(train_set, train_targets, checkpoints='../cup/'+str(n_units)+'units_cup_results')
+gs.fit(train_set, train_targets, checkpoints='../cup/'+str(n_units)+'units_cup_results_dropout')

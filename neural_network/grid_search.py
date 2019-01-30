@@ -15,9 +15,9 @@ import pickle
 def build_by_params(task, params, input_size):
     """
     Builds a neural network by passing all the parameters at ounce
-    :task - the task to be performed (Classification of Regression)
-    :params - parameters to build the neural network with
-    :input_size - the input size of the input layer
+    :param task - the task to be performed (Classification of Regression)
+    :param params - parameters to build the neural network with
+    :param input_size - the input size of the input layer
     """
     if params is None or task is None or input_size is None:
         print("You need to pass a valid parameter grid, task or input size")
@@ -76,10 +76,7 @@ class GridSearch:
         self.loss = loss_aux(loss)[0]
         self.grid = ParameterGrid(tuning_params)
         if random_search is not None:
-            self.random = True
             self.grid = random.choices(self.grid, k=random_search)
-        else:
-            self.random = False
         self.folds = folds
         self.restarts = restarts
         if metric is None:
@@ -97,13 +94,13 @@ class GridSearch:
         else:
             self.statistics = statistics
 
-    def fit(self, dataset, targets, checkpoints=None):
+    def fit(self, dataset, targets, val_set, val_targets, checkpoints=None):
         if self.folds is not None and self.folds > 0:
-            return self._fit_split_(dataset, targets, checkpoints)
+            return self._fit_split_(dataset, targets, val_set, val_targets, checkpoints)
         else:
-            return self._fit_no_split(dataset, targets, checkpoints)
+            return self._fit_no_split(dataset, targets, val_set, val_targets, checkpoints)
 
-    def _fit_split_(self, dataset, targets, checkpoints):
+    def _fit_split_(self, dataset, targets, val_set, val_targets, checkpoints):
         """
                 Fit the estimator with the given dataset and targets
                 :param dataset: data on which the model will fit
@@ -161,6 +158,7 @@ class GridSearch:
                                                                              epochs_drop=params['lr_sched'][1])))
 
                         curr_model, curr_metric, best_epoch = nn.fit(X_train, Y_train,
+                                                                     val_set=val_set, val_targets=val_targets,
                                                                      batch_size=params['batch_size'],
                                                                      test_size=params['test_size'],
                                                                      epochs=params['epoch'],
@@ -216,7 +214,7 @@ class GridSearch:
         shutil.rmtree(dir)
         return results
 
-    def _fit_no_split(self, dataset, targets, checkpoints):
+    def _fit_no_split(self, dataset, targets, val_set, val_targets, checkpoints):
         """
                 Fit the estimator with the given dataset and targets
                 :param dataset: data on which the model will fit
@@ -257,6 +255,7 @@ class GridSearch:
                                                                          epochs_drop=params['lr_sched'][1])))
 
                     curr_model, curr_metric, best_epoch = nn.fit(dataset, targets,
+                                                                 val_set=val_set, val_targets=val_targets,
                                                                  batch_size=params['batch_size'],
                                                                  test_size=params['test_size'],
                                                                  epochs=params['epoch'],

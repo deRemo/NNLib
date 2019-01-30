@@ -93,8 +93,8 @@ class NeuralNetwork:
             current_input = layer.out
         return current_input
 
-    def fit(self, dataset, targets, batch_size=32, buffer_size=None, test_size=0.3, epochs=100, patience=10,
-            save_pred=None, save_model=None, verbose=False):
+    def fit(self, dataset, targets, val_set=None, val_targets=None, batch_size=32, buffer_size=None, test_size=0.3,
+            epochs=100, patience=10, save_pred=None, save_model=None, verbose=False):
         """
         Fits the neural network on the given dataset with a training-validation cycle (the split is performed by the
         function itself with the proportions provided by test_size).
@@ -107,7 +107,9 @@ class NeuralNetwork:
             3) After an epoch of training the model performs the validation on the dedicated portion of the dataset.
                 If the loss does not decrease for #patience iterations, the algorithm performs an early stopping.
         :param dataset: data on which the model will fit
-        :param targets: ground_truth values of the given data
+        :param targets: ground truth values of the given data
+        :param val_set: data on which to perform validation
+        :param val_targets: ground_truth values of the validation set
         :param batch_size: if ==1 perform an online training,  if > 1 and < len(dataset) performs a mini batch training,
                                 if == -1 or >= len(dataset) perform a batch training
         :param buffer_size: number of records before calling backpropagation
@@ -131,7 +133,10 @@ class NeuralNetwork:
 
         tr_epochs = []
         vl_epochs = []
-        train_set, valid_set, train_targets, valid_targets = self._prepare_dataset_fit_(dataset, targets, test_size)
+        if val_set is None or val_targets is None:
+            train_set, val_set, train_targets, val_targets = self._prepare_dataset_fit_(dataset, targets, test_size)
+        else:
+            train_set, val_set, train_targets, val_targets = dataset, val_set, targets, val_targets
         train_indices = list(range(len(train_set)))
         for i in range(1, epochs+1):
             # -------------------------------------------------------------------- #
@@ -161,8 +166,8 @@ class NeuralNetwork:
             # -------------------------------------------------------------------- #
             #                           VALIDATION                                 #
             # -------------------------------------------------------------------- #
-            y_true = valid_targets
-            y_pred = self.predict(valid_set)
+            y_true = val_targets
+            y_pred = self.predict(val_set)
             vl_epochs.append(np.concatenate([y_true, y_pred], axis=1))
             if self.metric == 'loss':
                 curr_metric = np.sum(self.loss(y_true, y_pred), axis=0)/len(y_true)

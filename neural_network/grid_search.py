@@ -29,10 +29,10 @@ def build_by_params(task, params, input_size):
             if type(params[param][0]) is list:
                 print("no list of list (problem in ", param, ")")
             else:
-                print("only layers or dropout can be lists (problem in ", param, ")")
+                print("only layers or dropout as lists (problem in ", param, ")")
             return -1
-        elif type(params[param]) is tuple and param != 'lr_sched':
-            print("only lr_sched as tuple (problem in ", param, ")")
+        elif type(params[param]) is tuple and param != 'lr_sched' and param != 'layers':
+            print("only lr_sched or layer as tuple (problem in ", param, ")")
             return -1
 
     nn = NeuralNetwork()
@@ -51,8 +51,7 @@ def build_by_params(task, params, input_size):
                 optimizer=SGD(lr_init=params['lr'],
                 momentum=params['momentum'],
                 nesterov=params['nesterov'],
-                lr_sched=StepDecayScheduler(drop=params['lr_sched'][0],
-                epochs_drop=params['lr_sched'][1])))
+                lr_sched=StepDecayScheduler(drop=params['lr_sched'][0],epochs_drop=params['lr_sched'][1])))
     return nn
 
 class GridSearch:
